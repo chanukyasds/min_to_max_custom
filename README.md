@@ -28,7 +28,7 @@ Example:
 2)SELECT min_to_max(column_name,'<->') FROM table_name;
         RETURNS min<->max
 
-3) SELECT min_to_max(column_name,NULL) FROM table_name;        
+3)SELECT min_to_max(column_name,NULL) FROM table_name;        
         RETURNS min->max    
         This is the Default.
 
