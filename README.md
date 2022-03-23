@@ -22,14 +22,16 @@ custom_text is your symbol or text that apperars in between of min and max.
 
 Example:
 
-1)SELECT min_to_max(column_name,'->') FROM table_name;        
+1)SELECT min_to_max(column_name,'->') FROM table_name;
+
         RETURNS min->max 
 
 2)SELECT min_to_max(column_name,'<->') FROM table_name;
+        
         RETURNS min<->max
 
-3)SELECT min_to_max(column_name,NULL) FROM table_name;        
-        RETURNS min->max    
-        This is the Default.
+3)SELECT min_to_max(column_name,NULL) FROM table_name;
+
+        RETURNS min->max    This is the Default.
 
 Thanks.
