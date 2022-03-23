@@ -1,6 +1,6 @@
 # min_to_max_custom
 
-This Extension is Used to create an aggregate that process a column and returns the min and max values in a format of min CUSTOM max.
+This Extension is Used to create an aggregate that process a column and returns the min and max values in a format of min <CUSTOM TEXT> max.
 
 Supported Datatypes are SMALLINT, INTEGER, BIGINT, REAL, or DOUBLE PRECISION.
 
