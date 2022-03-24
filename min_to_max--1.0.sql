@@ -1,3 +1,11 @@
+-- Dropping functions and aggregate
+
+DROP FUNCTION IF EXISTS min_to_max_sfunc(internal,anynonarray,text);
+DROP FUNCTION IF EXISTS min_to_max_ffunc(internal,anynonarray,text);
+DROP AGGREGATE IF EXISTS min_to_max(anynonarray,text);
+
+-- Creating functions and aggregate
+
 CREATE OR REPLACE FUNCTION 
 min_to_max_sfunc(internal,anynonarray,text)
 RETURNS internal
