@@ -31,7 +31,7 @@ typedef union pgnum {
 	
 static text *
 	 array_to_text_internal(FunctionCallInfo fcinfo, ArrayType *v,
-							const char *fldsep, const char *null_string)
+							const char *fldsep)
 	 {
 		 text       *result;
 		 int         nitems,
@@ -44,8 +44,6 @@ static text *
 		 StringInfoData buf;
 		 bool        printed = false;
 		 char       *p;
-		 bits8      *bitmap;
-		 int         bitmask;
 		 int         i;
 		 ArrayMetaState *my_extra;
 	  
@@ -59,7 +57,6 @@ static text *
 		 element_type = ARR_ELEMTYPE(v);
 		 initStringInfo(&buf);
 	  
-	 
 		 my_extra = (ArrayMetaState *) fcinfo->flinfo->fn_extra;
 		 if (my_extra == NULL)
 		 {
@@ -71,7 +68,6 @@ static text *
 	  
 		 if (my_extra->element_type != element_type)
 		 {
-			 
 			 get_type_io_data(element_type, IOFunc_output,
 							  &my_extra->typlen, &my_extra->typbyval,
 							  &my_extra->typalign, &my_extra->typdelim,
@@ -80,55 +76,30 @@ static text *
 						   fcinfo->flinfo->fn_mcxt);
 			 my_extra->element_type = element_type;
 		 }
+		 
 		 typlen = my_extra->typlen;
 		 typbyval = my_extra->typbyval;
 		 typalign = my_extra->typalign;
 	  
 		 p = ARR_DATA_PTR(v);
-		 bitmap = ARR_NULLBITMAP(v);
-		 bitmask = 1;
 	  
 		 for (i = 0; i < nitems; i++)
 		 {
 			 Datum       itemvalue;
 			 char       *value;
-	  
-			 if (bitmap && (*bitmap & bitmask) == 0)
-			 {
-				 if (null_string != NULL)
-				 {
-					 if (printed)
-						 appendStringInfo(&buf, "%s%s", fldsep, null_string);
-					 else
-						 appendStringInfoString(&buf, null_string);
-					 printed = true;
-				 }
-			 }
+			 
+			 itemvalue = fetch_att(p, typbyval, typlen);
+  
+			 value = OutputFunctionCall(&my_extra->proc, itemvalue);
+  
+			 if (printed)
+				 appendStringInfo(&buf, "%s%s", fldsep, value);
 			 else
-			 {
-				 itemvalue = fetch_att(p, typbyval, typlen);
-	  
-				 value = OutputFunctionCall(&my_extra->proc, itemvalue);
-	  
-				 if (printed)
-					 appendStringInfo(&buf, "%s%s", fldsep, value);
-				 else
-					 appendStringInfoString(&buf, value);
-				 printed = true;
-	  
-				 p = att_addlength_pointer(p, typlen, p);
-				 p = (char *) att_align_nominal(p, typalign);
-			 }
-	  
-			 if (bitmap)
-			 {
-				 bitmask <<= 1;
-				 if (bitmask == 0x100)
-				 {
-					 bitmap++;
-					 bitmask = 1;
-				 }
-			 }
+				 appendStringInfoString(&buf, value);
+			 printed = true;
+  
+			 p = att_addlength_pointer(p, typlen, p);
+			 p = (char *) att_align_nominal(p, typalign);
 		 }
 	  
 		 result = cstring_to_text_with_len(buf.data, buf.len);
@@ -230,7 +201,6 @@ min_to_max_ffunc(PG_FUNCTION_ARGS)
 		deconstruct_array(vals, valsType, valsTypeWidth, valsTypeByValue, valsTypeAlignmentCode,
 			&valsContent, &valsNullFlags, &valsLength);
 			
-
 		switch (valsType) {
 		case INT2OID:
 			for (i = 0; i < valsLength; i++) {
@@ -330,6 +300,7 @@ min_to_max_ffunc(PG_FUNCTION_ARGS)
 		  }
 		retArray = construct_md_array(retContent, retNulls, 1, dims, lbs, valsType, retTypeWidth, retTypeByValue, retTypeAlignmentCode);
 
-		PG_RETURN_TEXT_P(array_to_text_internal(fcinfo, retArray, fldsep, NULL));
+		
+		PG_RETURN_TEXT_P(array_to_text_internal(fcinfo, retArray, fldsep));
 			
 	}
