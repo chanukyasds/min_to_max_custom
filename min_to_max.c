@@ -49,29 +49,41 @@ static text *
 	  
 		 ndims = ARR_NDIM(v);
 		 dims = ARR_DIMS(v);
-		 nitems = ArrayGetNItems(ndims, dims);
+		 nitems = ArrayGetNItems(ndims, dims); // we know this will be 2 only 
 	  
-		 if (nitems == 0)
+		 if (nitems == 0) 
 			 return cstring_to_text_with_len("", 0);
 	  
-		 element_type = ARR_ELEMTYPE(v);
+		 element_type = ARR_ELEMTYPE(v);  
+		 /*Initialize a StringInfoData struct (with previously undefined contents) to describe an empty string. initsize will be 1024*/
 		 initStringInfo(&buf);
 	  
+		/* actual structure cache type metadata needed for array manipulation*/
 		 my_extra = (ArrayMetaState *) fcinfo->flinfo->fn_extra;
+		 
 		 if (my_extra == NULL)
 		 {
-			 fcinfo->flinfo->fn_extra = MemoryContextAlloc(fcinfo->flinfo->fn_mcxt,
-														   sizeof(ArrayMetaState));
+			
+			 /* MemoryContextAlloc - >  Allocate space within the specified context.*/
+			 fcinfo->flinfo->fn_extra = MemoryContextAlloc(fcinfo->flinfo->fn_mcxt,sizeof(ArrayMetaState));
+			/* actual structure cache type metadata needed for array manipulation*/												 
 			 my_extra = (ArrayMetaState *) fcinfo->flinfo->fn_extra;
+			/* setting Ones compliment */
 			 my_extra->element_type = ~element_type;
 		 }
 	  
 		 if (my_extra->element_type != element_type)
 		 {
+			 
+			 /* given the type OID, return typlen, typbyval, typalign,
+					typdelim, typioparam, and IO function OID. The IO function
+                    returned is controlled by IOFuncSelector */
 			 get_type_io_data(element_type, IOFunc_output,
 							  &my_extra->typlen, &my_extra->typbyval,
 							  &my_extra->typalign, &my_extra->typdelim,
 							  &my_extra->typioparam, &my_extra->typiofunc);
+			/* Fill a FmgrInfo struct(&my_extra->proc), specifying a memory context in which its
+					 subsidiary data should go. */
 			 fmgr_info_cxt(my_extra->typiofunc, &my_extra->proc,
 						   fcinfo->flinfo->fn_mcxt);
 			 my_extra->element_type = element_type;
@@ -80,7 +92,9 @@ static text *
 		 typlen = my_extra->typlen;
 		 typbyval = my_extra->typbyval;
 		 typalign = my_extra->typalign;
-	  
+		 
+		 
+		 /* ARR_DATA_PTR -> Returns a pointer to the actual array data.*/
 		 p = ARR_DATA_PTR(v);
 	  
 		 for (i = 0; i < nitems; i++)
@@ -88,18 +102,27 @@ static text *
 			 Datum       itemvalue;
 			 char       *value;
 			 
+			 /* fetch_att-> get attribute value of array pointer by type and len*/
 			 itemvalue = fetch_att(p, typbyval, typlen);
   
+			 /* OutputFunctionCall -> Returns C string value*/
 			 value = OutputFunctionCall(&my_extra->proc, itemvalue);
   
 			 if (printed)
+				 /* * Format text data under the control of fmt (an sprintf-style format string)
+				  * and append it to whatever is already in str.  More space is allocated
+				  * to str if necessary.  This is sort of like a combination of sprintf and
+				  * strcat.*/
 				 appendStringInfo(&buf, "%s%s", fldsep, value);
 			 else
+				  /* Append a null-terminated string to str.*/
 				 appendStringInfoString(&buf, value);
 			 printed = true;
   
-			 p = att_addlength_pointer(p, typlen, p);
-			 p = (char *) att_align_nominal(p, typalign);
+			  /* att_addlength_pointer -> increments the given offset by the space needed */
+			  p = att_addlength_pointer(p, typlen, p);    // increase the offset of P to get next value based on pointer
+			  /*att_align_nominal -> aligns the given offset as needed for a datum of alignment requirement*/
+			  p = (char *) att_align_nominal(p, typalign); // align the p with typealign so that next fetch_att get exact itemvalue
 		 }
 	  
 		 result = cstring_to_text_with_len(buf.data, buf.len);
@@ -112,6 +135,7 @@ static text *
 Datum
 min_to_max_sfunc(PG_FUNCTION_ARGS)
 	{
+		/* Get the actual type OID of a specific function argument starts from zero */
 		Oid   arg_type = get_fn_expr_argtype(fcinfo->flinfo, 1);
 		MemoryContext aggcontext;
 		ArrayBuildState *state;
@@ -127,16 +151,29 @@ min_to_max_sfunc(PG_FUNCTION_ARGS)
 			 (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
 			  errmsg("Invalid Parameter Value")));
 
+		// AggCheckCallContext -> checks that func called in agg context or not
 		if (!AggCheckCallContext(fcinfo, &aggcontext))
 			elog(ERROR, "min_to_max_sfunc called in non-aggregate context");
 		
+		
 		if (PG_ARGISNULL(0))
+		 /* initArrayResult - initialize an empty ArrayBuildState
+    		element_type is the array element type (must be a valid array element type)
+    		rcontext is where to keep working state
+    		subcontext is a flag determining whether to use a separate memory context */
 		 state = initArrayResult(arg_type, aggcontext, false);
 		else
+		 /* Build Array from input */
 		 state = (ArrayBuildState *) PG_GETARG_POINTER(0);
 
 		data = PG_ARGISNULL(1) ? (Datum) 0 : PG_GETARG_DATUM(1);
-
+		/*
+		  accumArrayResult - accumulate one (more) Datum for an array result
+		  astate is working state (can be NULL on first call)
+		  dvalue/disnull represent the new Datum to append to the array
+		  element_type is the Datum's type (must be a valid array element type)
+		  rcontext is where to keep working state
+		*/
 		state = accumArrayResult(state,
 						  data,
 						  PG_ARGISNULL(1),
@@ -194,13 +231,17 @@ min_to_max_ffunc(PG_FUNCTION_ARGS)
 				ereport(ERROR, (errmsg("Supported Datatypes are SMALLINT, INTEGER, BIGINT, REAL, or DOUBLE PRECISION.")));
 			}
 
+		/*ARR_DIMS returns a pointer to an array of array dimensions (number of elements along the various array axes).*/
 		valsLength = (ARR_DIMS(vals))[0];
 
+		/* for given type OID, it return typlen, typbyval, typalign. */
 		get_typlenbyvalalign(valsType, &valsTypeWidth, &valsTypeByValue, &valsTypeAlignmentCode);
 
+		/* deconstruct_array -> simple method for extracting data from an array stores into valsContent*/
 		deconstruct_array(vals, valsType, valsTypeWidth, valsTypeByValue, valsTypeAlignmentCode,
 			&valsContent, &valsNullFlags, &valsLength);
 			
+		/* each get_typlenbyvalalign with OID return typewidth,typebyval,typealign */	
 		switch (valsType) {
 		case INT2OID:
 			for (i = 0; i < valsLength; i++) {
@@ -292,12 +333,25 @@ min_to_max_ffunc(PG_FUNCTION_ARGS)
 		}
 		
 
-		 lbs[0] = 1;
+		  lbs[0] = 1;
 		  dims[0] = 2;
 		  if (!resultIsNull) {
 			retNulls[0] = false;
 			retNulls[1] = false;
 		  }
+		  
+		  
+		/*
+		  * construct_md_array   --- simple method for constructing an array object
+		  *                          with arbitrary dimensions and possible NULLs
+		  *
+		  * elems: array of Datum items to become the array contents
+		  * nulls: array of is-null flags (can be NULL if no nulls)
+		  * ndims: number of dimensions
+		  * dims: integer array with size of each dimension
+		  * lbs: integer array with lower bound of each dimension
+		  * elmtype, elmlen, elmbyval, elmalign: info for the datatype of the items*/
+		  
 		retArray = construct_md_array(retContent, retNulls, 1, dims, lbs, valsType, retTypeWidth, retTypeByValue, retTypeAlignmentCode);
 
 		
