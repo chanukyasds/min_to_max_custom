@@ -96,7 +96,7 @@ static text *
 		 
 		 /* ARR_DATA_PTR -> Returns a pointer to the actual array data.*/
 		 p = ARR_DATA_PTR(v);
-	  
+		 
 		 for (i = 0; i < nitems; i++)
 		 {
 			 Datum       itemvalue;
@@ -200,8 +200,6 @@ min_to_max_ffunc(PG_FUNCTION_ARGS)
 		bool retNulls[2] = {true, true};
 		ArrayType* retArray;
 		
-		
-		
 
 		Assert(AggCheckCallContext(fcinfo, NULL));
 
@@ -216,6 +214,7 @@ min_to_max_ffunc(PG_FUNCTION_ARGS)
 		vals = (ArrayType *)makeMdArrayResult(state, 1, dims, lbs,
 						CurrentMemoryContext,
 						false);
+						
 
 		if (ARR_NDIM(vals) > 1) 
 			ereport(ERROR,(errmsg("Not received one dimensional array ")));
@@ -354,6 +353,10 @@ min_to_max_ffunc(PG_FUNCTION_ARGS)
 		  
 		retArray = construct_md_array(retContent, retNulls, 1, dims, lbs, valsType, retTypeWidth, retTypeByValue, retTypeAlignmentCode);
 
+		/* filter here if min and max have NULL values in retArray and return empty string */
+		if (ARR_HASNULL(retArray)) {
+				PG_RETURN_TEXT_P(cstring_to_text(""));
+		}
 		
 		PG_RETURN_TEXT_P(array_to_text_internal(fcinfo, retArray, fldsep));
 			
